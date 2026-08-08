@@ -1,0 +1,27 @@
+[Unit]
+Description=Buzz managed agent (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:%h/.nvm/versions/node/v24.18.0/bin:%h/buzz/target/release:/usr/local/bin:/usr/bin:/bin"
+Environment="BUZZ_RELAY_URL=wss://buzz.cloudfarm.ai"
+Environment="BUZZ_ACP_AGENTS=1"
+Environment="BUZZ_ACP_LAZY_POOL=true"
+Environment="BUZZ_ACP_RESPOND_TO=anyone"
+Environment="BUZZ_ACP_AGENT_OWNER=40311b9e4cd014bd0a4e2a6b5e3654b2259d7cd2937f9dc0a61656543a63228c"
+Environment="BUZZ_ACP_SESSION_TITLE=%i"
+EnvironmentFile=%h/.config/buzz-agents/%i.env
+WorkingDirectory=%h/.buzz/REPOS/%i
+ExecStart=%h/buzz/target/release/buzz-acp
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+KillMode=mixed
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
