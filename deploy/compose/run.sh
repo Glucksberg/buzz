@@ -86,6 +86,10 @@ case "${1:-help}" in
   backup-hint)
     backup_hint
     ;;
+  backup)
+    shift || true
+    "${SCRIPT_DIR}/backup.sh" --maintenance-window "${1:-${HOME}/backups/buzz}"
+    ;;
   add-member)
     docker compose exec relay /usr/local/bin/buzz-admin add-member --pubkey "${2:?Usage: ./run.sh add-member <npub-or-hex> [--role member|admin]}" "${@:3}"
     ;;
@@ -109,6 +113,7 @@ Commands:
   status        Show compose service status
   config        Render merged compose config
   backup-hint   Print the production backup checklist
+  backup [dir]  Consistent Postgres + MinIO/git/Redis backup (brief write outage)
 
   add-member <npub-or-hex> [--role member|admin]
                 Add a relay member (default role: member)

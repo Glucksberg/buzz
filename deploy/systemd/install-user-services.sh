@@ -10,10 +10,12 @@ SYSTEMD_DIR="${HOME}/.config/systemd/user"
 install -d -m 700 "${CONFIG_DIR}"
 install -d -m 755 "${SYSTEMD_DIR}"
 install -m 644 "${SCRIPT_DIR}/buzz-agent@.service" "${SYSTEMD_DIR}/buzz-agent@.service"
+install -m 644 "${SCRIPT_DIR}/buzz-agent-monitor.service" "${SYSTEMD_DIR}/buzz-agent-monitor.service"
+install -m 644 "${SCRIPT_DIR}/buzz-agent-monitor.timer" "${SYSTEMD_DIR}/buzz-agent-monitor.timer"
 
 for agent in codex claude cursor; do
   install -d -m 700 "${HOME}/.buzz/REPOS/${agent}"
 done
 
 systemctl --user daemon-reload
-echo "Installed buzz-agent@.service. Credentials and services are still disabled."
+echo "Installed Buzz agent and monitor units. Credentials and services are still disabled."

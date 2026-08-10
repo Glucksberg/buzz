@@ -52,6 +52,24 @@ systemctl --user status 'buzz-agent@*'
 journalctl --user -u 'buzz-agent@*' --since today
 ```
 
+## Agent health alerts
+
+The installer also provides `buzz-agent-monitor.timer`. Every two minutes it
+checks the three agent units and posts to the configured Buzz channel only when
+the down-agent set changes. Failed deliveries are retried on the next run.
+
+Enable it after all three agents are running:
+
+```bash
+systemctl --user enable --now buzz-agent-monitor.timer
+systemctl --user start buzz-agent-monitor.service
+systemctl --user status buzz-agent-monitor.timer
+```
+
+The service uses the Codex agent credential only to send the operational
+message. Change `BUZZ_AGENT_MONITOR_CHANNEL` in the unit before installation if
+alerts should go somewhere other than `#general`.
+
 Do not run the same agent nsec on Windows and the VPS at the same time. Buzz's
 launcher protocol cannot enforce singleton execution across unrelated hosts.
 
