@@ -1,5 +1,7 @@
-import { LogIn, SquareTerminal } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { LogIn, Server, SquareTerminal } from "lucide-react";
 import type * as React from "react";
+import { toast } from "sonner";
 
 import { ChatHeader } from "@/features/chat/ui/ChatHeader";
 import type { EphemeralChannelDisplay } from "@/features/channels/lib/ephemeralChannel";
@@ -21,6 +23,7 @@ import {
   toggleTerminalPanel,
   useTerminalPanel,
 } from "@/features/terminal/terminalPanelStore";
+import { useRemoteSshUrl } from "@/features/terminal/remoteSsh";
 
 const DM_HEADER_AVATAR_SIZE = 32;
 const DM_HEADER_AVATAR_STATUS_GEOMETRY = scaleProfileAvatarStatusGeometry(
@@ -79,6 +82,8 @@ export function ChannelScreenHeader({
     onJoinChannel;
 
   const terminalPanel = useTerminalPanel();
+  const remoteSshUrl =
+    useRemoteSshUrl(currentPubkey, activeChannel?.id).data ?? null;
   const terminalButton = activeChannel ? (
     <Button
       aria-label={
@@ -93,6 +98,26 @@ export function ChannelScreenHeader({
       <SquareTerminal />
     </Button>
   ) : null;
+  const remoteSshButton =
+    activeChannel && remoteSshUrl ? (
+      <Button
+        aria-label="Open Remote SSH"
+        onClick={() => {
+          void openUrl(remoteSshUrl).catch(() => {
+            toast.error(
+              "Could not open SSH. Make sure your system has an ssh:// handler.",
+            );
+          });
+        }}
+        size="sm"
+        title="Connect to this relay host over SSH"
+        type="button"
+        variant="outline"
+      >
+        <Server className="mr-1.5 h-4 w-4" />
+        Remote SSH
+      </Button>
+    ) : null;
   const channelActions = activeChannel ? (
     showJoinButton ? (
       <Button
@@ -118,6 +143,7 @@ export function ChannelScreenHeader({
   ) : null;
   const actions = activeChannel ? (
     <div className="flex items-center gap-1">
+      {remoteSshButton}
       {terminalButton}
       {channelActions}
     </div>
