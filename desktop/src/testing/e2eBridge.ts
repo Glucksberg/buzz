@@ -394,6 +394,8 @@ type E2eConfig = {
     // equals this is treated as a moderation DM (composer disabled). Absent →
     // fail open (no mod-DM detection), matching the Rust command's contract.
     relaySelf?: string | null;
+    /** Owner-gated SSH URL returned by `get_remote_ssh_url`. */
+    remoteSshUrl?: string | null;
     oaOwnerIsMe?: boolean;
     /** Whether the mock relay advertises NIP-43 membership support. Defaults to false. */
     relayRequiresMembership?: boolean;
@@ -12909,6 +12911,8 @@ export function maybeInstallE2eTauriMocks() {
           );
         }
         return activeConfig?.mock?.relaySelf ?? null;
+      case "get_remote_ssh_url":
+        return activeConfig?.mock?.remoteSshUrl ?? null;
       case "archive_identity":
       case "unarchive_identity":
         // The spec only verifies UI state, not the submitted request shape;

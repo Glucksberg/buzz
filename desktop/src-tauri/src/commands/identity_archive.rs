@@ -225,6 +225,37 @@ pub struct ArchivedIdentitiesSnapshot {
 struct RelayInformationDocument {
     #[serde(default, rename = "self")]
     self_: Option<String>,
+    #[serde(default)]
+    pubkey: Option<String>,
+    #[serde(default)]
+    buzz_remote_ssh_url: Option<String>,
+}
+
+fn remote_ssh_url_for_owner(
+    doc: &RelayInformationDocument,
+    current_pubkey: &str,
+) -> Option<String> {
+    let owner = doc.pubkey.as_deref()?.trim();
+    if owner.len() != 64
+        || !owner.chars().all(|c| c.is_ascii_hexdigit())
+        || !owner.eq_ignore_ascii_case(current_pubkey)
+    {
+        return None;
+    }
+
+    let raw = doc.buzz_remote_ssh_url.as_deref()?.trim();
+    let url = url::Url::parse(raw).ok()?;
+    if url.scheme() != "ssh"
+        || url.host().is_none()
+        || url.username().is_empty()
+        || url.password().is_some()
+        || !matches!(url.path(), "" | "/")
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    Some(url.to_string())
 }
 
 pub(crate) async fn fetch_relay_self(state: &AppState) -> Result<Option<String>, String> {
@@ -330,6 +361,38 @@ pub async fn get_relay_self(state: State<'_, AppState>) -> Result<Option<String>
     fetch_relay_self(&state).await
 }
 
+/// Return the relay-advertised SSH entry point only to the configured owner.
+///
+/// This gate controls the UI affordance, not host access. The URL carries no
+/// credentials and sshd still requires the user's SSH key.
+#[tauri::command]
+pub async fn get_remote_ssh_url(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let current_pubkey = state
+        .keys
+        .lock()
+        .map_err(|error| error.to_string())?
+        .public_key()
+        .to_hex();
+    let relay_url = relay_ws_url_with_override(&state);
+    let http_url = relay_http_base_url(&relay_url);
+    let response = state
+        .http_client
+        .get(&http_url)
+        .header("Accept", "application/nostr+json")
+        .send()
+        .await
+        .map_err(|e| classify_request_error(&e))?;
+
+    if !response.status().is_success() {
+        return Ok(None);
+    }
+    let doc = response
+        .json::<RelayInformationDocument>()
+        .await
+        .map_err(|_| "relay returned malformed NIP-11 document".to_string())?;
+    Ok(remote_ssh_url_for_owner(&doc, &current_pubkey))
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -410,6 +473,51 @@ mod tests {
             doc.self_.as_deref(),
             Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
         );
+    }
+
+    #[test]
+    fn remote_ssh_is_visible_only_to_the_advertised_owner() {
+        let owner = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let doc: RelayInformationDocument = serde_json::from_value(serde_json::json!({
+            "pubkey": owner,
+            "buzz_remote_ssh_url": "ssh://dev@relay.example.com:6996"
+        }))
+        .unwrap();
+
+        assert_eq!(
+            remote_ssh_url_for_owner(&doc, owner).as_deref(),
+            Some("ssh://dev@relay.example.com:6996")
+        );
+        assert_eq!(
+            remote_ssh_url_for_owner(
+                &doc,
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn remote_ssh_rejects_credential_or_command_injection() {
+        let owner = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        for remote_url in [
+            "https://dev@relay.example.com",
+            "ssh://relay.example.com",
+            "ssh://dev:secret@relay.example.com",
+            "ssh://dev@relay.example.com/run-this",
+            "ssh://dev@relay.example.com?command=run-this",
+        ] {
+            let doc: RelayInformationDocument = serde_json::from_value(serde_json::json!({
+                "pubkey": owner,
+                "buzz_remote_ssh_url": remote_url
+            }))
+            .unwrap();
+            assert_eq!(
+                remote_ssh_url_for_owner(&doc, owner),
+                None,
+                "must reject {remote_url}"
+            );
+        }
     }
 
     /// Spec test-vector regression for gotcha #3: the NIP-OA preimage subject

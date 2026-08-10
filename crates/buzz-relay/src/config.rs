@@ -183,6 +183,13 @@ pub struct Config {
     /// with the `owner` role on first startup.
     pub relay_owner_pubkey: Option<String>,
 
+    /// Optional owner-only SSH entry point advertised in NIP-11.
+    ///
+    /// This is discovery metadata, not authentication: the desktop only shows
+    /// it to the identity matching `relay_owner_pubkey`, while sshd still
+    /// enforces the host's configured key authentication.
+    pub remote_ssh_url: Option<String>,
+
     /// Canonical HTTP origin of the deployment-global operator API.
     ///
     /// Every operator NIP-98 `u` tag is verified against this origin, independent
@@ -365,6 +372,26 @@ fn parse_operator_api_origin(raw: &str) -> Result<String, ConfigError> {
         ));
     }
     Ok(raw.trim_end_matches('/').to_string())
+}
+
+fn parse_remote_ssh_url(raw: &str) -> Result<String, ConfigError> {
+    let url = url::Url::parse(raw.trim()).map_err(|e| {
+        ConfigError::InvalidValue(format!("BUZZ_REMOTE_SSH_URL is not a valid URL: {e}"))
+    })?;
+    if url.scheme() != "ssh"
+        || url.host().is_none()
+        || url.username().is_empty()
+        || url.password().is_some()
+        || !matches!(url.path(), "" | "/")
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(ConfigError::InvalidValue(
+            "BUZZ_REMOTE_SSH_URL must be ssh://user@host[:port] without a password, path, query, or fragment"
+                .to_string(),
+        ));
+    }
+    Ok(url.to_string())
 }
 
 const DEFAULT_PUSH_GATEWAY_DELIVERY_URL: &str = "https://push.buzz.xyz/v1/deliveries/apns";
@@ -647,6 +674,17 @@ impl Config {
                     None
                 }
             });
+
+        let remote_ssh_url = std::env::var("BUZZ_REMOTE_SSH_URL")
+            .ok()
+            .filter(|raw| !raw.trim().is_empty())
+            .map(|raw| parse_remote_ssh_url(&raw))
+            .transpose()?;
+        if remote_ssh_url.is_some() && relay_owner_pubkey.is_none() {
+            return Err(ConfigError::InvalidValue(
+                "BUZZ_REMOTE_SSH_URL requires a valid RELAY_OWNER_PUBKEY".to_string(),
+            ));
+        }
 
         // Note: intentionally not prefixed with BUZZ_ — same relay-identity
         // config family as RELAY_OWNER_PUBKEY. Comma-separated 64-char hex
@@ -1016,6 +1054,7 @@ impl Config {
             mesh,
             mesh_demo_echo,
             relay_owner_pubkey,
+            remote_ssh_url,
             relay_operator_api_origin,
             relay_operator_pubkeys,
             allow_nip_oa_auth,
@@ -1133,6 +1172,10 @@ mod tests {
             "relay_owner_pubkey should default to None"
         );
         assert!(
+            config.remote_ssh_url.is_none(),
+            "remote_ssh_url should default to None"
+        );
+        assert!(
             config.relay_operator_pubkeys.is_empty(),
             "relay_operator_pubkeys should default empty (provisioning disabled)"
         );
@@ -1157,6 +1200,27 @@ mod tests {
             config.huddle_audio_available,
             "huddle_audio_available should default to true so single-pod (N=1) keeps today's huddle behavior"
         );
+    }
+
+    #[test]
+    fn remote_ssh_url_requires_safe_ssh_authority() {
+        assert_eq!(
+            parse_remote_ssh_url("ssh://dev@relay.example.com:6996").unwrap(),
+            "ssh://dev@relay.example.com:6996"
+        );
+
+        for invalid in [
+            "https://dev@relay.example.com",
+            "ssh://relay.example.com",
+            "ssh://dev:secret@relay.example.com",
+            "ssh://dev@relay.example.com/path",
+            "ssh://dev@relay.example.com?command=rm",
+        ] {
+            assert!(
+                parse_remote_ssh_url(invalid).is_err(),
+                "must reject {invalid}"
+            );
+        }
     }
 
     #[test]

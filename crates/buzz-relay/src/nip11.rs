@@ -52,6 +52,10 @@ pub struct RelayInfo {
     /// Public WebSocket URL of the dedicated NIP-AB device-pairing relay.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pairing_relay_url: Option<String>,
+    /// Owner-only SSH entry point understood by Buzz desktop clients.
+    /// Authentication remains entirely with sshd; this is discovery metadata.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buzz_remote_ssh_url: Option<String>,
     /// Relay's own signing pubkey (NIP-11 `self` field, NIP-43).
     #[serde(rename = "self", skip_serializing_if = "Option::is_none")]
     pub relay_self: Option<String>,
@@ -168,6 +172,7 @@ impl RelayInfo {
             version: env!("CARGO_PKG_VERSION").to_string(),
             limitation: Some(relay_limitation(max_message_length)),
             pairing_relay_url: pairing_relay_url.map(str::to_string),
+            buzz_remote_ssh_url: None,
             relay_self: relay_self.map(|s| s.to_string()),
         }
     }
@@ -247,6 +252,8 @@ pub(crate) async fn nip11_document(state: &crate::state::AppState, raw_host: &st
         state.config.max_frame_bytes,
         state.config.pairing_relay_url.as_deref(),
     );
+    info.pubkey = state.config.relay_owner_pubkey.clone();
+    info.buzz_remote_ssh_url = state.config.remote_ssh_url.clone();
     let tenant_host = if state.config.push_gateway_delivery_url.is_some() {
         crate::tenant::bind_community(&state.db, raw_host)
             .await
@@ -414,6 +421,13 @@ mod tests {
         let info = RelayInfo::build(None, None, false, DEFAULT_MAX_FRAME_BYTES, None);
         let json = serde_json::to_value(&info).expect("serialize");
         assert!(json.get("pairing_relay_url").is_none());
+    }
+
+    #[test]
+    fn remote_ssh_metadata_is_omitted_by_default() {
+        let info = RelayInfo::build(None, None, false, DEFAULT_MAX_FRAME_BYTES, None);
+        let json = serde_json::to_value(&info).expect("serialize");
+        assert!(json.get("buzz_remote_ssh_url").is_none());
     }
 
     /// NIP-WP → NIP-11 mirror: a set workspace icon is served in the standard

@@ -360,6 +360,8 @@ type MockBridgeOptions = {
    * evaluates false).
    */
   relayRole?: "owner" | "admin" | "member" | null;
+  /** Owner-gated SSH URL returned by `get_remote_ssh_url`. */
+  remoteSshUrl?: string | null;
   /**
    * Descriptors returned by the mocked `pick_and_upload_media` /
    * `upload_media_bytes` commands. When omitted, the bridge returns a single
