@@ -1,0 +1,16 @@
+[Unit]
+Description=Monitor Buzz managed agent services
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment="PATH=%h/buzz/target/release:/usr/local/bin:/usr/bin:/bin"
+Environment="BUZZ_RELAY_URL=wss://buzz.cloudfarm.ai"
+Environment="BUZZ_AGENT_MONITOR_CHANNEL=d2105094-fa4d-5b82-a0bf-0a03953af392"
+EnvironmentFile=%h/.config/buzz-agents/codex.env
+ExecStart=%h/buzz/deploy/systemd/monitor-agents.sh
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+

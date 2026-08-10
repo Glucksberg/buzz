@@ -46,6 +46,22 @@ keypair.
 
 Run `./run.sh backup-hint` for the backup checklist.
 
+## Consistent backups
+
+Create a local backup artifact with a brief write maintenance window:
+
+```bash
+./run.sh backup                    # defaults to ~/backups/buzz
+./run.sh backup /mnt/offsite/buzz  # preferred when mounted storage exists
+```
+
+The command stops relay writes, creates a custom-format Postgres dump, flushes
+Redis, snapshots the MinIO/git/Redis volumes, and includes the Compose `.env`.
+A trap restores every service that was running even if the backup fails. The
+archive and checksum are mode `0600`; they contain production secrets. Copy the
+result off the VPS (or write directly to mounted offsite storage), because a
+backup left only on the same disk does not cover host loss.
+
 ## Validation
 
 Before sharing an install link publicly, verify a fresh install with:

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check Buzz managed agents every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Persistent=true
+Unit=buzz-agent-monitor.service
+
+[Install]
+WantedBy=timers.target
+
